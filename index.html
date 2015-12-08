@@ -1,0 +1,266 @@
+<h2>How to play : use math functions to fire target. <br>
+  <a href="https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Math">Math funcs </a>
+</h2>
+<textarea id="fireText" style="width:400px;">10*sin(x/10)</textarea>
+<button onClick="preFire();">Fire</button>
+<div>
+<canvas id="mycanvas" width="900" height="600">
+    Your browser is not supported.
+</canvas>
+<br>
+<canvas id="mirror" width="900" height="600">
+    Your browser is not supported.
+</canvas>
+
+</div>
+<br>
+
+<script src="https://togetherjs.com/togetherjs-min.js"></script>
+<a onclick="TogetherJS(this); return false;"><img src="https://togetherjs.com/images/start-togetherjs-blue.png" style="width: 135px" /></a>
+
+<script>
+
+try{
+  Object.getOwnPropertyNames(Math).forEach(function(a,b){ window[a] = Math[a]})
+}
+catch(e){
+    console.log(e);
+}
+
+function getRandom(){
+
+    return parseInt(Math.random()*200);
+};
+var canvas = document.getElementById("mycanvas");
+var ctx = canvas.getContext("2d");
+
+var generateCircleCoord=function(){
+    var xx = canvas.width/2 + parseInt(Math.random()*canvas.width/2);
+    var yy= parseInt(Math.random()*canvas.height);
+    return {x:xx,y:yy}; 
+}
+var _fireFunc=null;
+var coord = generateCircleCoord();
+var _centerX=coord.x;
+var _centerY=coord.y;
+
+var _bw=20;
+var _bh=20;
+
+var _bwx=0;
+var _bwy=0;
+_bwx=parseInt(Math.random()*canvas.width);
+_bwy=parseInt(Math.random()*canvas.height);
+var r4=[];
+
+var _meX=parseInt(Math.random()*canvas.width/2);
+var _meY=parseInt(Math.random()*canvas.height)-10;
+for(var i=0;i<16;i++){
+    r4.push(getRandom());
+}
+
+function preFire(){
+
+   var f=  eval("(function(x){\n var y="+document.getElementById("fireText").value+"\n return y; })");
+   _fireFunc=f;
+   ctx.clearRect ( 0 , 0 , canvas.width, canvas.height );
+   axes(canvas,ctx);
+   barriers(ctx);
+   randomCircle(ctx);
+ //  me(ctx);
+   fire(canvas,ctx);
+}
+
+function getY(x){
+    //((1+50*x)/(1+x))+(Math.sign(x-100)+1)*5*Math.sin(x/10)
+    var ifa=_fireFunc(x) ;
+    return (canvas.height/2) -( ifa);
+}
+
+function fire(canvas,ctx){
+        ctx.restore();
+        var ctx = canvas.getContext("2d");
+        ctx.lineWidth = 1;
+        var x = 0; var y = canvas.height/2;
+        var timeout = setInterval(function() {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+
+        x+=1;
+        y = getY(x);
+        ctx.lineTo(x,y);
+        ctx.stroke();
+        if (x > canvas.width||y>canvas.height||y<0) {
+             alert("out of zone");
+            clearInterval(timeout);
+        }
+        else if(isBarried(ctx,x,y)){
+              clearInterval(timeout);
+              alert("You hit the wall :((");
+        }
+        else if(isInside(x,y,_centerX,_centerY,10)) {
+                alert("You Hit!!! :))");
+                clearInterval(timeout);
+        }
+         
+         sendData('draw',x-1+","+y);
+        }, 10);
+        ctx.save();
+
+}
+
+function sendData(type,data){
+  if (TogetherJS.running){
+    TogetherJS.send({ "type": type || 'draw', "data" : data});
+  }
+}
+
+var mirror = document.getElementById("mirror");
+var mCtx = mirror.getContext("2d");
+mCtx.beginPath();
+mCtx.moveTo(0,mirror.height/2);
+mCtx.stroke();
+mCtx.strokeStyle = '#003300';
+mCtx.lineWidth = 1;
+
+var prex=0;
+var prey=mirror.height/2;
+
+var _draw = function(msg){
+    var d = msg.data.split(",");
+    mCtx.beginPath();
+    mCtx.moveTo(prex,prey);
+    mCtx.lineTo(d[0],d[1]);
+    mCtx.stroke();
+    prex = d[0];
+    prey = d[1];
+}
+var _drawBoard=function(msg){
+   mCtx.beginPath();
+   mCtx.putImageData(msg.data,0,0);
+   mCtx.stroke();
+}
+var _listener=function(){
+  TogetherJS.hub.on('draw', function (msg) {
+  if (!msg.sameUrl) {
+      return;
+  }
+   _draw(msg);
+  
+  });
+
+   TogetherJS.hub.on('board', function (msg) {
+  if (!msg.sameUrl) {
+      return;
+  }
+   _drawBoard(msg);
+  
+  });
+
+      TogetherJS.hub.on('connected', function (msg) {
+  if (!msg.sameUrl) {
+      return;
+  }
+    sendData('board',ctx.getImageData(0,0,canvas.width,canvas.height));
+  
+  });
+
+}
+_listener();
+
+
+
+function randomCircle(context){
+     if(isBarried(context,_centerX,_centerY)){
+        var coord = generateCircleCoord();
+        _centerX  = coord.x;
+        _centerY = coord.y;
+        randomCircle(context);
+        return;
+     }
+      var centerX = _centerX;
+      var centerY = _centerY;
+      var radius = 10;
+
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+      context.fillStyle = 'green';
+      context.fill();
+      context.lineWidth =1;
+      context.strokeStyle = '#003300';
+      context.stroke();
+
+}
+
+function me(context){
+
+      var centerX = _meX;
+      var centerY = _meY;
+      var radius = 10;
+
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+      context.fillStyle = 'red';
+      context.fill();
+      context.lineWidth =1;
+      context.strokeStyle = '#003300';
+      context.stroke();
+
+}
+
+function axes(canvas,ctx){
+    ctx.save()
+    ctx.strokeStyle = '#003311';
+    ctx.beginPath();
+    ctx.moveTo(canvas.width/2, 0);
+    ctx.lineTo(canvas.width/2,canvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height/2);
+    ctx.lineTo(canvas.width, canvas.height/2);
+    ctx.stroke();
+    ctx.restore();
+
+}
+
+var barrierColor ="red";
+function barriers(ctx){
+    ctx.fillStyle = barrierColor;
+    ctx.fillRect(_bwx, _bwy, _bwx+_bw, _bwy+_bh);
+    var arr= [];
+    arr.push(r4.slice(0,4));
+    arr.push(r4.slice(4,8));
+    arr.push(r4.slice(8,12));
+    arr.push(r4.slice(12,16));
+   
+   for(var i=0;i<arr.length;i++){
+     ctx.fillRect(arr[i][0],arr[i][1],arr[i][2],arr[i][3]);
+   }
+   
+    ctx.stroke();
+
+}
+
+function isBarried(ctx,x1,y1){
+    var data = ctx.getImageData(x1,y1,1,1).data;
+    if(data[0]==255&&data[1]===0&&data[2]===0){
+        return true;
+    }
+    else return false;
+}
+
+function isInside(x1,y1,x0,y0,r){
+    return Math.sqrt((x1-x0)*(x1-x0) + (y1-y0)*(y1-y0)) < r
+}
+
+
+
+window.onload = function(){
+    axes(canvas,ctx);
+    barriers(ctx);
+    randomCircle(ctx);
+  //  me(ctx);
+    sendData('connected',{});
+}
+
+</script>
