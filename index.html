@@ -259,64 +259,6 @@ function fire(app){
 
 }
 
-function sendData(type,data){
-  if (TogetherJS.running){
-    TogetherJS.send({ "type": type || 'draw', "data" : data});
-  }
-}
-
-var mirror = document.getElementById("mirror");
-var mCtx = mirror.getContext("2d");
-mCtx.beginPath();
-mCtx.moveTo(0,mirror.height/2);
-mCtx.stroke();
-mCtx.strokeStyle = '#003300';
-mCtx.lineWidth = 1;
-
-var prex=0;
-var prey=mirror.height/2;
-
-var _draw = function(msg){
-    var d = msg.data.split(",");
-    mCtx.beginPath();
-    mCtx.moveTo(prex,prey);
-    mCtx.lineTo(d[0],d[1]);
-    mCtx.stroke();
-    prex = d[0];
-    prey = d[1];
-}
-var _drawBoard=function(msg){
-   mCtx.beginPath();
-   mCtx.putImageData(msg.data,0,0);
-   mCtx.stroke();
-}
-var _listener=function(){
-  TogetherJS.hub.on('draw', function (msg) {
-  if (!msg.sameUrl) {
-      return;
-  }
-   _draw(msg);
-  
-  });
-
-   TogetherJS.hub.on('board', function (msg) {
-  if (!msg.sameUrl) {
-      return;
-  }
-   _drawBoard(msg);
-  
-  });
-
-      TogetherJS.hub.on('connected', function (msg) {
-  if (!msg.sameUrl) {
-      return;
-  }
-    sendData('board',ctx.getImageData(0,0,canvas.width,canvas.height));
-  
-  });
-
-}
-_listener();
 
 
 
