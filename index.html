@@ -1,23 +1,32 @@
+
+<!-- deploy-->
+<html>
+<head>
+
+ <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+  <title>Ax(e|i)s The  Game</title>
+
+  <script src="axis/sweetalert.min.js"></script>
+  <link rel="stylesheet" href="axis/sweetalert.css">
+
+</head>
+<body>
+
 <h2>How to play : use math functions to fire target. <br>
   <a href="https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Math">Math funcs </a>
 </h2>
 <textarea id="fireText" style="width:400px;">10*sin(x/10)</textarea>
-<button onClick="preFire();">Fire</button>
+<button id="fireButton" onClick="preFire();">Fire</button>
 <div>
 <canvas id="mycanvas" width="900" height="600">
     Your browser is not supported.
 </canvas>
-<br>
-<canvas id="mirror" width="900" height="600">
-    Your browser is not supported.
-</canvas>
-
 </div>
 <br>
 
-<script src="https://togetherjs.com/togetherjs-min.js"></script>
-<a onclick="TogetherJS(this); return false;"><img src="https://togetherjs.com/images/start-togetherjs-blue.png" style="width: 135px" /></a>
 
+<script src="http://cdn.peerjs.com/0.3/peer.min.js"></script>
 <script>
 
 try{
@@ -27,59 +36,197 @@ catch(e){
     console.log(e);
 }
 
-function getRandom(){
-
-    return parseInt(Math.random()*200);
+var CONFIG = {
+    random_max : 200,
+    canvas_width : 900,
+    canvas_height : 600
 };
-var canvas = document.getElementById("mycanvas");
-var ctx = canvas.getContext("2d");
 
-var generateCircleCoord=function(){
-    var xx = canvas.width/2 + parseInt(Math.random()*canvas.width/2);
-    var yy= parseInt(Math.random()*canvas.height);
-    return {x:xx,y:yy}; 
-}
-var _fireFunc=null;
-var coord = generateCircleCoord();
-var _centerX=coord.x;
-var _centerY=coord.y;
-
-var _bw=20;
-var _bh=20;
-
-var _bwx=0;
-var _bwy=0;
-_bwx=parseInt(Math.random()*canvas.width);
-_bwy=parseInt(Math.random()*canvas.height);
-var r4=[];
-
-var _meX=parseInt(Math.random()*canvas.width/2);
-var _meY=parseInt(Math.random()*canvas.height)-10;
-for(var i=0;i<16;i++){
-    r4.push(getRandom());
+function RandomUtils(max){
+    this.max = max;
+    var that = this;
+    return {
+      getRandom : function(){
+          return parseInt(Math.random()*that.max);
+      }
+    }
 }
 
-function preFire(){
+ RandomUtils.getInstance  = function(){
+    if(!RandomUtils._instance){
+        RandomUtils._instance = new RandomUtils(CONFIG.random_max);
+    }
+    return RandomUtils._instance;
+ }
 
-   var f=  eval("(function(x){\n var y="+document.getElementById("fireText").value+"\n return y; })");
-   _fireFunc=f;
-   ctx.clearRect ( 0 , 0 , canvas.width, canvas.height );
-   axes(canvas,ctx);
-   barriers(ctx);
-   randomCircle(ctx);
- //  me(ctx);
-   fire(canvas,ctx);
+
+function App(elId,mode){
+  var that = this;
+  this.mode = mode || MODE_SINGLE;
+  this.elId = elId;
+  this.canvas = document.getElementById(elId);
+  this.ctx = this.canvas.getContext('2d');
+  this.random =RandomUtils.getInstance();
+  this.random.randomCoordForTarget = function(){
+       var targetX = that.canvas.width/2 + parseInt(Math.random()*that.canvas.width/2);
+       var targetY =  parseInt(Math.random()*that.canvas.height);
+       that.data.target = that.data.target || {};
+       that.data.target.x = targetX;
+       that.data.target.y = targetY;
+  } 
+  this.random.randomBarriers = function(){
+        var r4= [];
+        for(var i=0;i<16;i++){
+            r4.push(that.random.getRandom());
+        }
+        that.data.barriers = r4;
+  }
+  this.data= {};
+  this.setData = function(d){
+    that.data = d;
+  }
+ 
+  this.initDatas = function(){
+        that.random.randomCoordForTarget();
+        that.random.randomBarriers();
+  }
+
+  this.clearRect = function(){
+     that.ctx.clearRect ( 0 , 0 , that.canvas.width, that.canvas.height );
+  }
+
+  this.fireButton = document.getElementById("fireButton");
+  this.fireOn = function(){
+      that.fireButton.disabled=false;
+  }
+  this.fireOff = function(){
+      that.fireButton.disabled=true;
+  }
+  this.toggleFire = function(){
+      that.fireButton.disabled=!that.fireButton.disabled;
+  }
+
+  this.didIplay = function(){
+     return !that.fireButton.disabled;
+  }
+
 }
 
-function getY(x){
-    //((1+50*x)/(1+x))+(Math.sign(x-100)+1)*5*Math.sin(x/10)
-    var ifa=_fireFunc(x) ;
-    return (canvas.height/2) -( ifa);
+function Target(app,obj){
+      this.conf  = obj ||{ radius : 10, isValidRegion: function(){ return true;}};
+      this.app  = app;
+      var that  = this;
+     
+  
+      this.draw = function(){
+              var context = that.app.ctx;
+              var target = that.app.data.target;
+              if(!that.conf.isValidRegion(context,target.x,target.y)){
+                   app.random.randomCoordForTarget();
+                   that.draw();
+                   return;
+              }
+              var centerX = target.x;
+              var centerY = target.y;
+              var radius = that.conf.radius;
+
+              context.beginPath();
+              context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+              context.fillStyle = 'green';
+              context.fill();
+              context.lineWidth =1;
+              context.strokeStyle = '#003300';
+              context.stroke();
+      };     
 }
 
-function fire(canvas,ctx){
+function Axes (app){
+    var that =this;
+    this.app  = app;
+
+    this.draw = function(){
+        var ctx = that.app.ctx;
+        var canvas = that.app.canvas;
+        ctx.save()
+        ctx.strokeStyle = '#003311';
+        ctx.beginPath();
+        ctx.moveTo(canvas.width/2, 0);
+        ctx.lineTo(canvas.width/2,canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height/2);
+        ctx.lineTo(canvas.width, canvas.height/2);
+        ctx.stroke();
         ctx.restore();
-        var ctx = canvas.getContext("2d");
+
+   }
+}
+
+
+function Barriers(app){
+      var that = this;
+      var barrierColor ="red";
+      this.app = app;
+      this.draw = function(){
+            var ctx = that.app.ctx;
+            var r4 = that.app.data.barriers;
+            ctx.fillStyle = barrierColor;
+         
+            var arr= [];
+            arr.push(r4.slice(0,4));
+            arr.push(r4.slice(4,8));
+             arr.push(r4.slice(8,12));
+             arr.push(r4.slice(12,16));
+         
+         for(var i=0;i<arr.length;i++){
+           ctx.fillRect(arr[i][0],arr[i][1],arr[i][2],arr[i][3]);
+         }
+         
+          ctx.stroke();
+
+      }
+}
+
+
+
+
+
+
+
+function getFunction(s){
+     return  eval("(function(x){\n var y="+s+"\n return y; })");
+}
+ 
+function preFire(){
+   var ft = document.getElementById("fireText").value;
+   if(app.mode!=MODE_SINGLE){
+       s2({request:"function", data :ft});
+   }
+  
+   var f=  getFunction(ft);
+   fireiWithFunc(f);
+}
+
+function fireiWithFunc(f){
+   app._fireFunc =f;
+   app.clearRect();
+   
+   app.axes.draw();
+   app.barriers.draw();
+   app.target.draw();
+   fire(app);
+}
+
+function getY(app,x){
+    //((1+50*x)/(1+x))+(Math.sign(x-100)+1)*5*Math.sin(x/10)
+    var ifa=app._fireFunc(x) ;
+    return (app.canvas.height/2) -( ifa);
+}
+
+function fire(app){
+        var canvas = app.canvas;
+        var ctx = app.ctx;
+        ctx.restore();
         ctx.lineWidth = 1;
         var x = 0; var y = canvas.height/2;
         var timeout = setInterval(function() {
@@ -87,23 +234,26 @@ function fire(canvas,ctx){
         ctx.moveTo(x, y);
 
         x+=1;
-        y = getY(x);
+        y = getY(app,x);
         ctx.lineTo(x,y);
         ctx.stroke();
         if (x > canvas.width||y>canvas.height||y<0) {
-             alert("out of zone");
-            clearInterval(timeout);
+             swal("out of zone :((");
+             clearInterval(timeout);
+             fireFinished();
         }
         else if(isBarried(ctx,x,y)){
               clearInterval(timeout);
-              alert("You hit the wall :((");
+              swal("You hit the wall :((");
+              fireFinished();
         }
         else if(isInside(x,y,_centerX,_centerY,10)) {
-                alert("You Hit!!! :))");
+                swal("Good job!", "You Hit!!! :))", "success");
                 clearInterval(timeout);
+                fireFinished();
         }
          
-         sendData('draw',x-1+","+y);
+         
         }, 10);
         ctx.save();
 
@@ -170,76 +320,7 @@ _listener();
 
 
 
-function randomCircle(context){
-     if(isBarried(context,_centerX,_centerY)){
-        var coord = generateCircleCoord();
-        _centerX  = coord.x;
-        _centerY = coord.y;
-        randomCircle(context);
-        return;
-     }
-      var centerX = _centerX;
-      var centerY = _centerY;
-      var radius = 10;
 
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
-      context.fillStyle = 'green';
-      context.fill();
-      context.lineWidth =1;
-      context.strokeStyle = '#003300';
-      context.stroke();
-
-}
-
-function me(context){
-
-      var centerX = _meX;
-      var centerY = _meY;
-      var radius = 10;
-
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
-      context.fillStyle = 'red';
-      context.fill();
-      context.lineWidth =1;
-      context.strokeStyle = '#003300';
-      context.stroke();
-
-}
-
-function axes(canvas,ctx){
-    ctx.save()
-    ctx.strokeStyle = '#003311';
-    ctx.beginPath();
-    ctx.moveTo(canvas.width/2, 0);
-    ctx.lineTo(canvas.width/2,canvas.height);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, canvas.height/2);
-    ctx.lineTo(canvas.width, canvas.height/2);
-    ctx.stroke();
-    ctx.restore();
-
-}
-
-var barrierColor ="red";
-function barriers(ctx){
-    ctx.fillStyle = barrierColor;
-    ctx.fillRect(_bwx, _bwy, _bwx+_bw, _bwy+_bh);
-    var arr= [];
-    arr.push(r4.slice(0,4));
-    arr.push(r4.slice(4,8));
-    arr.push(r4.slice(8,12));
-    arr.push(r4.slice(12,16));
-   
-   for(var i=0;i<arr.length;i++){
-     ctx.fillRect(arr[i][0],arr[i][1],arr[i][2],arr[i][3]);
-   }
-   
-    ctx.stroke();
-
-}
 
 function isBarried(ctx,x1,y1){
     var data = ctx.getImageData(x1,y1,1,1).data;
@@ -254,13 +335,168 @@ function isInside(x1,y1,x0,y0,r){
 }
 
 
+var app = null;
 
-window.onload = function(){
-    axes(canvas,ctx);
-    barriers(ctx);
-    randomCircle(ctx);
-  //  me(ctx);
-    sendData('connected',{});
+var initAppWith ={};
+
+initAppWith.guest=function(data){
+    app = new App("mycanvas",MODE_GUEST);
+    app.fireOff();
+    app.setData(data);
+    runWithData();
+    return app;
 }
 
+initAppWith.multi = function(){
+     app = new App("mycanvas",MODE_MULTI);
+     app.fireOff();
+     app.initDatas();
+     runWithData();
+     return app;
+}
+
+
+var MODE_SINGLE = 1;
+var MODE_GUEST = 2;
+var MODE_MULTI =3;
+
+
+
+var runWithData = function(){
+
+    var axes = new Axes(app);
+    axes.draw();
+    app.axes = axes;
+
+    var barriers = new Barriers(app);
+    barriers.draw();
+    app.barriers= barriers;
+
+    var target = new Target(app);
+    target.draw();
+    app.target = target;
+}
+
+
+
+var peer=null;
+var key= 'wd2wqgcdo1ug14i';
+
+var s2 = null;
+
+var fireFinished = function(){
+    if(app.mode !=MODE_SINGLE){
+        if(app.didIplay()){
+            app.toggleFire();
+            s2({request:"opp_played"});
+        }
+    }
+}
+
+var handleConnection = function(conn,data){
+      if(data){
+            if(data.request=="board"){
+                  conn.send({response:"board",data :app.data});
+            }
+            else if(data.response=="board"){
+                 initAppWith.guest(data.data);
+                 conn.send({request:"boardInited"});
+            }
+            else if(data.request=="boardInited"){
+                 app.fireOn();
+            }
+            else if(data.request=="opp_played"){
+                 app.toggleFire();
+            }
+            else if(data.request=="function"){
+                var f = getFunction(data.data);
+                fireiWithFunc(f);
+            }
+      }
+}
+
+var setUpHost = function(){
+              var app =initAppWith.multi();
+      
+              peer = new Peer({key: key}); 
+              peer.on('open',function(id){
+                  swal("Share link", "http://web.itu.edu.tr/agirtopcu#"+id, "success");
+                  peer.on('connection', function(conn) {
+                         conn.on('data', function(data){
+                         handleConnection(conn,data);
+                      });
+                         s2 = function(d){
+                            conn.send(d);
+                         }
+                });
+            
+              })
+}
+
+
+var setUpGuest  = function(hostId){
+           peer = new Peer({key:key})
+            var conn = peer.connect(hostId);
+            conn.on('open', function() {
+            // Receive messages
+            conn.on('data', function(data) {
+                    handleConnection(conn,data);
+            });
+             s2 = function(d){
+                            conn.send(d);
+                         }
+
+            conn.send({request:"board"});
+
+            
+          });
+}
+
+var setUpSingle=function(){
+
+       app = new App("mycanvas",MODE_SINGLE);
+
+}
+
+
+
+
+window.onload = function(){
+
+ 
+    if(window.location.hash){
+        setUpGuest(window.location.hash.replace("#",""));
+    }
+    else {
+
+
+
+          swal({   title: "Game MODE ?",   text: "Single or Multiplayer?",   type: "success",   showCancelButton: true,   confirmButtonColor: "#DD6B55",   confirmButtonText: "Single",   closeOnConfirm: false }, 
+            function(){   swal("Deleted!", "Your imaginary file has been deleted.", "success"); });
+
+          var f = function(isSingle){
+              if(isSingle){
+                 setUpHostSingle();
+                 
+              }
+              else{
+                  setUpHost();
+              }
+              
+          }
+
+          swal({   title: "Game MODE ?",   text: "Single or Multiplayer?",    type: "success",   showCancelButton: true,   confirmButtonColor: "#C1C1C1",   confirmButtonText: "Single",   cancelButtonText: "Multiplayer",   closeOnConfirm: true,closeOnCancel: true },f);
+
+    }
+
+   
+    
+}
+
+
+
+
 </script>
+
+</body>
+</html>
