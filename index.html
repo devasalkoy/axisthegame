@@ -397,7 +397,9 @@ var setUpGuest  = function(hostId){
 var setUpSingle=function(){
 
        app = new App("mycanvas",MODE_SINGLE);
-
+app.fireOff();
+     app.initDatas();
+     runWithData();
 }
 
 
